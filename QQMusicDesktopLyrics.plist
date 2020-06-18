@@ -1,0 +1,11 @@
+{
+	Filter = {
+		Bundles = (
+			"com.tencent.QQMusic",
+			"com.tencent.QQMusicHD",
+			"com.apple.springboard",
+			"com.apple.backboardd",
+			"com.brend0n.iosretargetapp",
+		);
+	};
+}
