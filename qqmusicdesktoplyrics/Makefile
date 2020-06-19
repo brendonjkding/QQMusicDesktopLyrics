@@ -9,7 +9,7 @@ include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = qqmusicdesktoplyrics
 
-qqmusicdesktoplyrics_FILES = QMDLPrefRootListController.m
+qqmusicdesktoplyrics_FILES = QMDLPrefRootListController.m BDInfoListController.m
 qqmusicdesktoplyrics_INSTALL_PATH = /Library/PreferenceBundles
 qqmusicdesktoplyrics_FRAMEWORKS = UIKit
 qqmusicdesktoplyrics_PRIVATE_FRAMEWORKS = Preferences

@@ -1,7 +1,7 @@
 Package: com.brend0n.qqmusicdesktoplyrics
 Name: QQMusicDesktopLyrics
 Depends: mobilesubstrate, com.rpetrich.rocketbootstrap (>= 1.0.2) | firmware (<< 7.0), preferenceloader
-Version: 0.0.2
+Version: 0.0.3
 Architecture: iphoneos-arm
 Description: show QQMusic lyrics anywhere
 Maintainer: Brend0n <brendonjkding@126.com>

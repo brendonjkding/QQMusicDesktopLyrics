@@ -1,34 +1,16 @@
 #import "QQWQSuspendView/QQWQSuspendView.h"
-#import "QQWQSuspendView/TriangleView.h"
+#import "LyricLabel.h"
+#import "MyLyric.h"
+
 #import <substrate.h>
 #import <rocketbootstrap/rocketbootstrap.h>
 #import <AppSupport/CPDistributedMessagingCenter.h>
 #import <SpringBoard/SpringBoard.h>
-#import <GraphicsServices/GSEvent.h>
 #import <notify.h>
 
-#ifdef DEBUG
-#define TEST1
-#define TEST2
-#endif
 //cuctom
-@interface MyLyric:NSObject
-@property(nonatomic)NSString* text;
-@property long long startTime;
-@end
-@implementation MyLyric
-@end
-
 @interface LyricWindow:UIWindow
 @property BOOL positionLocked;
-@end
-@implementation LyricWindow
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-	if(_positionLocked) return nil;
-    UIView *hitTestView = [super hitTest:point withEvent:event];
-    if(hitTestView==self) return nil;
-    else return hitTestView;
-}
 @end
 
 @interface QQLyricMessagingCenter : NSObject {
@@ -37,18 +19,31 @@
 @end
 
 //global
+BOOL enabled;
 QQWQSuspendView* lyricView;
 LyricWindow *lyricWindow;
 NSMutableDictionary *allLyrics;
 double lstTime=0;
-MyLyric* lstLyric;
+MySentence* lstSentence;
+NSString*lstSongName;
+int lstSentenceIndex=0;
 CPDistributedMessagingCenter * _messagingCenter;
 UIWindow*rootWindow=0;
 BOOL positionLocked=0;
 unsigned lyricWindowContextId=0;
+LyricLabel *lyric;
+NSString*prefPath=@"/var/mobile/Library/Preferences/com.brend0n.qqmusicdesktoplyrics.plist";
 void loadPref();
 
 //custom imp
+@implementation LyricWindow
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+	if(_positionLocked) return nil;
+    UIView *hitTestView = [super hitTest:point withEvent:event];
+    if(hitTestView==self) return nil;
+    else return hitTestView;
+}
+@end
 @implementation QQLyricMessagingCenter
 + (instancetype)sharedInstance {
 	static dispatch_once_t once = 0;
@@ -63,8 +58,10 @@ void loadPref();
 	if ((self = [super init])) {
 		_messagingCenter = [CPDistributedMessagingCenter centerNamed:@"com.brend0n.qqmusicdesktoplyrics"];
 		// apply rocketbootstrap regardless of iOS version (via rpetrich)
-		rocketbootstrap_distributedmessagingcenter_apply(_messagingCenter);
-
+#if TARGET_OS_SIMULATOR
+#else
+    	rocketbootstrap_distributedmessagingcenter_apply(_messagingCenter);
+#endif
 		[_messagingCenter runServerOnCurrentThread];
 		[_messagingCenter registerForMessageName:@"changeLyric" target:self selector:@selector(handleMessageNamed:withUserInfo:)];
 	}
@@ -73,8 +70,18 @@ void loadPref();
 }
 
 - (NSDictionary *)handleMessageNamed:(NSString *)name withUserInfo:(NSDictionary *)userInfo {
+	if(!enabled) return nil;
 	NSString*lyricText=userInfo[@"lyricText"];
 	lyricView.label.text=lyricText;
+
+	MySentence*sentence=[NSKeyedUnarchiver unarchiveObjectWithData:userInfo[@"sentence"]];
+	[lyric removeFromSuperview];
+	[lyric stopTimer];
+	
+	CGSize screenSize = [[UIScreen mainScreen] bounds].size;
+	lyric=[[LyricLabel alloc] initWithFrame:CGRectMake(0,0,screenSize.width,30)];
+	[lyric prepareLyric:sentence];
+    [lyricView addSubview:lyric];
 	return nil;
 }
 
@@ -108,10 +115,20 @@ void loadPref();
 @property(retain, nonatomic) id currentSong; // @synthesize currentSong;
 @end
 
+@interface KSCharacter
+@property(retain, nonatomic) NSString *character; // @synthesize character=_character;
+@property(nonatomic) long long duration; // @synthesize duration=_duration;
+@property(nonatomic) long long end; // @synthesize end=_end;
+@property(nonatomic) long long start; // @synthesize start=_start;
+@property(nonatomic) long long startTime; // @synthesize startTime=_startTime;
+
+@end
+
 @interface KSSentence
 @property(nonatomic) long long startTime; // @synthesize startTime=_startTime;
 @property(retain, nonatomic) NSString *text; // @synthesize text=_text;
 @property(nonatomic) int sentenceTransType;
+@property(retain, nonatomic) NSMutableArray *charactersArray; // @synthesize charactersArray=_charactersArray;
 @end
 
 
@@ -143,37 +160,42 @@ void loadPref();
 	%orig;
     double curTime=[self curTime]*1000;
     double diff=curTime-lstTime;
-    if(diff<600&&diff>-1)return;
+    if(diff<200&&diff>-1)return;
     lstTime=curTime;
     
     NSString*_lrc=0;
-    NSArray* lyricArray=[allLyrics objectForKey:[[self currentSong] song_Name]];
-    if(!lyricArray){
+    NSArray* sentencesArray=[allLyrics objectForKey:[[self currentSong] song_Name]];
+    if(!sentencesArray){
     	NSLog(@"no lyric:%@",[[self currentSong] song_Name]);
-        if(![[lstLyric text] isEqualToString:@" "]){
-            lstLyric=[MyLyric alloc];
-            [lstLyric setText:@" "];
-            _lrc=[lstLyric text];
+        if(![[lstSentence text] isEqualToString:@" "]){
+            lstSentence=[MySentence alloc];
+            [lstSentence setText:@" "];
+            _lrc=[lstSentence text];
         }
     }
     else{
-        MyLyric* curLyric=0;
+        MySentence* curLyric=0;
         
-        
-        for(id myLyric in lyricArray){
-            if([myLyric startTime]>curTime) break;
-            curLyric=myLyric;
+        if(![[[self currentSong] song_Name] isEqualToString:lstSongName]){
+        	lstSentenceIndex=0;
+        }
+        for(int i=lstSentenceIndex;i<[sentencesArray count];i++){
+        	MySentence*sentence=sentencesArray[i];
+            if([sentence startTime]>curTime) break;
+            curLyric=sentence;
+            lstSentenceIndex=i;
         }
         
-        if(curLyric&&curLyric!=lstLyric) {
-            lstLyric=curLyric;
-            _lrc=[lstLyric text];
+        if(curLyric&&curLyric!=lstSentence) {
+            lstSentence=curLyric;
+            _lrc=[lstSentence text];
         }
     }
 	if(_lrc) {
-		NSLog(@"%@",_lrc);
+		NSLog(@"curSentence:%@",_lrc);
     	// Send a message with a dictionary
-	    NSDictionary * message = [NSDictionary dictionaryWithObjectsAndKeys: _lrc,@"lyricText", nil];
+    	NSData*sentenceData=[NSKeyedArchiver archivedDataWithRootObject:lstSentence];
+	    NSDictionary * message = [NSDictionary dictionaryWithObjectsAndKeys: _lrc,@"lyricText",sentenceData,@"sentence",nil];
 	    [_messagingCenter sendMessageName:@"changeLyric" userInfo:message];
 		
 	}
@@ -181,70 +203,62 @@ void loadPref();
 %end
 
 
-@class NSMutableDictionary, NSString;
+void createMyLyric(SongInfo* info,LocalLyricObject*lyricObject){
+	KSLyric*l=[lyricObject originLyric];
+// 		NSMutableArray *ma=l.sentencesArray;
+// 		KSSentence *s=ma[0];
+// 		NSLog(@"text: %@",[ma[0] text]);
+// 		NSLog(@"text: %@",[ma[1] text]);
+// 		NSLog(@"text: %@",[ma[2] text]);
+
+	NSString* lyricName=[info song_Name];
+	// NSLog(@"name:%@",lyricName);
+	NSMutableArray *sentencesArray=l.sentencesArray;
+	NSMutableArray *tempMySentences=[NSMutableArray arrayWithCapacity:200];
+
+	// NSLog(@"%llu",[(KSCharacter*)[sentencesArray[0] charactersArray][0] startTime]);
+	// NSLog(@"%llu",[(KSCharacter*)[sentencesArray[0] charactersArray][0] duration]);
+	// NSLog(@"%llu",[(KSCharacter*)[sentencesArray[0] charactersArray][1] startTime]);
+
+	// NSLog(@"%llu",[(KSCharacter*)[sentencesArray[1] charactersArray][0] startTime]);
+	// NSLog(@"%llu",[(KSCharacter*)[sentencesArray[1] charactersArray][0] duration]);
+	// NSLog(@"%llu",[(KSCharacter*)[sentencesArray[1] charactersArray][1] startTime]);
+
+	for(KSSentence* sentence in sentencesArray){
+	    MySentence *mySentence=[MySentence alloc];
+	    [mySentence setText:[sentence text]];
+	    [mySentence setStartTime:[sentence startTime]];
+	    NSMutableArray*charactersArray=[NSMutableArray arrayWithCapacity:30];
+	    for(KSCharacter* character in [sentence charactersArray]){
+	    	MyCharacter*myCharacter=[MyCharacter new];
+	    	[myCharacter setStartTime:[character startTime]];
+	    	[myCharacter setDuration:[character duration]];
+	    	[myCharacter setStart:[character start]];
+	    	[myCharacter setEnd:[character end]];
+	    	[charactersArray addObject:myCharacter];
+	    }
+	    [mySentence setCharactersArray:charactersArray];
+	    [tempMySentences addObject:mySentence];
+	}
+	[allLyrics setValue:tempMySentences forKey:lyricName];
+}
 
 %hook LyricManager
 - (id)getLyricObjectFromLocal:(id)arg1 lyricFrom:(unsigned long long)arg2 { 
-#ifdef TEST2
 	NSLog(@"getLyricObjectFromLocal:(id)%@ lyricFrom:(unsigned long long) start",arg1);
-#endif
 	id r = %orig; 
-#ifdef TEST2
 	NSLog(@" = %@", r); 
-#endif
 	if(r){
-		KSLyric*l=[r originLyric];
-		NSMutableArray *ma=l.sentencesArray;
-#ifdef TEST2
-		KSSentence *s=ma[0];
-		NSLog(@"text: %@",[ma[0] text]);
-		NSLog(@"text: %@",[ma[1] text]);
-		NSLog(@"text: %@",[ma[2] text]);
-#endif
-
-		NSString* lyricName=[arg1 song_Name];
-		NSLog(@"name:%@",lyricName);
-		NSMutableArray *sentencesArray=l.sentencesArray;
-		NSMutableArray *tempMyLyrics=[NSMutableArray arrayWithCapacity:100];
-		for(id sentence in sentencesArray){
-		    MyLyric *myLyric=[MyLyric alloc];
-		    [myLyric setText:[sentence text]];
-		    [myLyric setStartTime:[sentence startTime]];
-		    [tempMyLyrics addObject:myLyric];
-		}
-		[allLyrics setValue:tempMyLyrics forKey:lyricName];
+		createMyLyric(arg1,r);
 	}
 	return r; 
 }
 - (id)getLyricObjectFromLocal:(id)arg1 { 
-#ifdef TEST2
 	NSLog(@"getLyricObjectFromLocal:(id)%@ lyricFrom:(unsigned long long) start",arg1);
-#endif
 	id r = %orig; 
-#ifdef TEST2
 	NSLog(@" = %@", r); 
-#endif
 	if(r){
-		KSLyric*l=[r originLyric];
-		NSMutableArray *ma=l.sentencesArray;
-#ifdef TEST2
-		KSSentence *s=ma[0];
-		NSLog(@"text: %@",[ma[0] text]);
-		NSLog(@"text: %@",[ma[1] text]);
-		NSLog(@"text: %@",[ma[2] text]);
-#endif
-
-		NSString* lyricName=[arg1 song_Name];
-		NSLog(@"name:%@",lyricName);
-		NSMutableArray *sentencesArray=l.sentencesArray;
-		NSMutableArray *tempMyLyrics=[NSMutableArray arrayWithCapacity:100];
-		for(id sentence in sentencesArray){
-		    MyLyric *myLyric=[MyLyric alloc];
-		    [myLyric setText:[sentence text]];
-		    [myLyric setStartTime:[sentence startTime]];
-		    [tempMyLyrics addObject:myLyric];
-		}
-		[allLyrics setValue:tempMyLyrics forKey:lyricName];
+		createMyLyric(arg1,r);
 	}
 	return r; 
 }
@@ -264,29 +278,26 @@ void loadPref();
 	[lyricWindow setAlpha:1.0];
 	[lyricWindow setBackgroundColor:[UIColor clearColor]];
 	lyricView=[QQWQSuspendView showWithType:WQSuspendViewTypeNone inWindow:nil tapBlock:^{} ];
-	// [lyricWindow makeKeyAndVisible];
+	[lyricWindow addSubview:lyricView];
 
 	loadPref();
 	[QQLyricMessagingCenter sharedInstance];
 	unsigned contextId=[lyricWindow _contextId];
-	NSLog(@"got------? %u",contextId);
 	lyricWindowContextId=contextId;
 
-	NSString*prefPath=@"/var/mobile/Library/Preferences/com.brend0n.qqmusicdesktoplyrics.plist";
+	
     NSMutableDictionary *prefs = [[NSMutableDictionary alloc] initWithContentsOfFile:prefPath];
     if(!prefs) prefs=[NSMutableDictionary new];
     prefs[@"lyricWindowContextId"]=[NSNumber numberWithUnsignedInt:lyricWindowContextId];
     [prefs writeToFile:prefPath atomically:YES];
     notify_post("com.brend0n.qqmusicdesktoplyrics/loadPref");
-#ifdef TEST1
+
+	[lyricView.label removeFromSuperview];
 	CGSize screenSize = [[UIScreen mainScreen] bounds].size;
-    LabelView *_label=[[LabelView alloc] initWithFrame:CGRectMake(0,0,screenSize.width,60)];
-    [_label setBackgroundColor:[UIColor clearColor]];
-    // [lyricWindow addSubview:_label];
-    // [rootWindow addSubview:_label];
-    [lyricWindow addSubview:lyricView];
+	lyric=[[LyricLabel alloc] initWithFrame:CGRectMake(0,0,screenSize.width,30)];
+	[lyric testSwitch];
+    [lyricView addSubview:lyric];
     
-#endif
 }
 %end
 
@@ -333,17 +344,11 @@ void loadPref();
 // }
 // %end
 %end// SBHook
-// %hook UITouch
-// - (CGPoint)locationInView:(UIView *)view{
 
-// }
-// %end
 %group BBHook
 %hook CAWindowServerDisplay
-
-// -(unsigned)contextIdAtPosition:(CGPoint)arg1  { NSLog(@"contextIdAtPosition:(CGPoint){%g, %g}  start",arg1.x,arg1.y);unsigned r = %orig; NSLog(@" = %u", r); return r; }
 -(unsigned)contextIdAtPosition:(CGPoint)arg1 excludingContextIds:(id)arg2  { 
-	NSLog(@"contextIdAtPosition:(CGPoint){%g, %g} excludingContextIds:(id)%@  start",arg1.x,arg1.y,arg2);
+	// NSLog(@"contextIdAtPosition:(CGPoint){%g, %g} excludingContextIds:(id)%@  start",arg1.x,arg1.y,arg2);
 	unsigned r ;
 	if(positionLocked&&lyricWindowContextId){
 		if(!arg2) arg2=[NSMutableArray new];
@@ -353,28 +358,26 @@ void loadPref();
 
 	}
 	else r= %orig; 
-	NSLog(@" = %u", r); 
+	// NSLog(@" = %u", r); 
 	return r; 
 }
-// -(unsigned)clientPortAtPosition:(CGPoint)arg1  { NSLog(@"clientPortAtPosition:(CGPoint)arg1  start");unsigned r = %orig; NSLog(@" = %u", r); return r; }
-// -(CGPoint)convertPoint:(CGPoint)arg1 toContextId:(unsigned)arg2  { NSLog(@"convertPoint:(CGPoint){%g, %g} toContextId:(unsigned)%u  start",arg1.x,arg1.y,arg2);CGPoint r = %orig; NSLog(@" = {%g, %g}", r.x, r.y); return r; }
-// -(CGPoint)convertPoint:(CGPoint)arg1 fromContextId:(unsigned)arg2  { NSLog(@"convertPoint:(CGPoint)arg1 fromContextId:(unsigned)arg2  start");CGPoint r = %orig; NSLog(@" = {%g, %g}", r.x, r.y); return r; }
-
 %end
 %end //BBHook
+
 void loadPref(){
-	NSMutableDictionary *prefs = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/com.brend0n.qqmusicdesktoplyrics.plist"];
-	bool enabled;
-	if(!prefs) enabled=1;
-	else enabled=[prefs[@"enabled"] boolValue]==YES?1:0;
-	// BOOL positionLocked;
+	NSLog(@"loadPref");
+	NSMutableDictionary *prefs = [[NSMutableDictionary alloc] initWithContentsOfFile:prefPath];
+	
+	if(!prefs) enabled=YES;
+	else enabled=[prefs[@"enabled"] boolValue];
 	if(!prefs) positionLocked=FALSE;
 	else positionLocked=[prefs[@"positionLocked"] boolValue];
+
 	lyricWindowContextId=[prefs[@"lyricWindowContextId"] unsignedIntValue];
 
 	if(lyricWindow){
-		[lyricWindow setHidden:enabled?FALSE:TRUE];
-		[lyricView setHidden:enabled?FALSE:TRUE];
+		[lyricWindow setHidden:!enabled];
+		[lyricView setHidden:!enabled];
 		[lyricWindow setPositionLocked:positionLocked];
 	}
 	
@@ -382,12 +385,16 @@ void loadPref(){
 
 //ctor
 %ctor{
+	NSLog(@"ctor QQMusicDesktopLyrics");
 	if([[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.tencent.QQMusic"]||[[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.tencent.QQMusicHD"]){
 		%init(QQMusicHook);
-		// myLyrics=[NSMutableArray arrayWithCapacity:100];
+
 		allLyrics=[NSMutableDictionary dictionaryWithCapacity:100];
 		_messagingCenter = [CPDistributedMessagingCenter centerNamed:@"com.brend0n.qqmusicdesktoplyrics"];
+#if TARGET_OS_SIMULATOR
+#else
     	rocketbootstrap_distributedmessagingcenter_apply(_messagingCenter);
+#endif
 
 	}
 	else if([[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.apple.backboardd"]){

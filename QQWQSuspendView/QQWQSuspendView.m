@@ -8,7 +8,7 @@
 
 #import "QQWQSuspendView.h"
 #ifdef DEBUG
-#define kButtonWidth 60
+#define kButtonWidth 30
 #else
 #define kButtonWidth 30
 #endif
@@ -22,27 +22,10 @@ BOOL positionLocked;
 @property (nonatomic, strong) dispatch_source_t timer;
 
 @end
-// @interface MyLabel:UILabel
 
-// @end
-// @implementation MyLabel
-// // -(UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-// //     NSLog(@"MyLabel hitTest");
-// //     return nil;
-// // }
-// @end
 
 @implementation QQWQSuspendView
-
-
-
 static QQWQSuspendView *_suspendView;
-
-// - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-//     NSLog(@"QQWQSuspendView hitTest");
-//     if(positionLocked) return nil;
-//     return  [super hitTest:point withEvent:event];
-// }
 
 - (instancetype)initWithFrame:(CGRect)frame{
     self = [super initWithFrame:frame];
@@ -64,7 +47,7 @@ static QQWQSuspendView *_suspendView;
 
 - (void)configurationUI{
     //自定义
-    self.backgroundColor = [UIColor clearColor];
+    self.backgroundColor = [[UIColor alloc] initWithRed:1 green:1 blue:1 alpha:0.3];
     self.layer.cornerRadius = 5;
     self.layer.masksToBounds = YES;
     //边框宽度
