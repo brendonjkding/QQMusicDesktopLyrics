@@ -44,6 +44,27 @@
 			<key>PostNotification</key>
 			<string>com.brend0n.qqmusicdesktoplyrics/loadPref</string>
 		</dict>
+
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>自动隐藏</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.brend0n.qqmusicdesktoplyrics</string>
+			<key>key</key>
+			<string>autoHide</string>
+			<key>label</key>
+			<string>自动隐藏</string>
+			<key>PostNotification</key>
+			<string>com.brend0n.qqmusicdesktoplyrics/loadPref</string>
+		</dict>
 	</array>
 	<key>title</key>
 	<string>QQMusicDesktopLyrics</string>

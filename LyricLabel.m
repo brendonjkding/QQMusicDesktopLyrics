@@ -4,7 +4,7 @@
     self=[super initWithFrame:frame];
     if(!self) return self;
     CGSize screenSize = [[UIScreen mainScreen] bounds].size;
-    _width=screenSize.width;
+    // self.frame.size.width=screenSize.width;
     
     self.textColor=[UIColor blackColor];
     self.adjustsFontSizeToFitWidth=NO;
@@ -14,32 +14,34 @@
     return self;
 }
 -(void)adjustFontSize{
-    CGFloat fontSize=1;
+    CGFloat fontSize=17;
     while(true){
-        if(fontSize==18) break;
-        if([self textWidth:self.text withFont:[UIFont fontWithName:@"Helvetica-Bold" size:fontSize]]>_width) break;
-        fontSize++;
+        if([self textWidth:self.text withFont:[UIFont fontWithName:@"Helvetica-Bold" size:fontSize]]<=self.frame.size.width) break;
+        fontSize--;
     }
-    fontSize--;
+
     UIFont*font=[UIFont fontWithName:@"Helvetica-Bold" size:fontSize];
     [self setFont:font];
 }
 -(void)stopTimer{
     if(_timer)  dispatch_source_cancel(_timer);
 }
--(void)prepareLyric:(MySentence*)sentence{
+-(void)prepareSentence:(MySentence*)sentence{
+    [self stopTimer];
+    if([[sentence text] isEqualToString:@" "]) return;
     _sentence=sentence;
     self.text=[_sentence text];
-    if([self.text isEqualToString:@" "]) return;
+    
     [self adjustFontSize];
     _fullLyricWidth=[self textWidth:self.text withFont:self.font];
     _charactersArray=[_sentence charactersArray];
     // for(MyCharacter* c in _charactersArray){
     //     NSLog(@"%@ %lld %lld",[c character],[c startTime],[c duration]);
     // }
+    if(![_charactersArray count]) return;
     _sentenceStartTime=[(MyCharacter*)_charactersArray[0] startTime];
     _lstIndex=0;
-    _startTime=CACurrentMediaTime()*1000.0-500.0;
+    _startTime=CACurrentMediaTime()*1000.0-250.0;
     _timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
     dispatch_source_set_timer(_timer, dispatch_walltime(NULL, 0), (1.0/24.0) * NSEC_PER_SEC, 0);
 
@@ -68,7 +70,7 @@
             // NSLog(@"%d,%d",startCIndex,endCIndex);
             if(i==[_charactersArray count]) {
                 dispatch_source_cancel(_timer);
-                _currentLyricPosition=_width;
+                _currentLyricPosition=self.frame.size.width;
                 
             }
             else {
@@ -91,15 +93,15 @@
 - (CGFloat)locationToCharacterIndex:(int)index{
     NSString*currentLyric=[self.text substringToIndex:index];
     CGFloat currentLyricWidth=[self textWidth:currentLyric withFont:self.font];
-    CGFloat ret=(_width-_fullLyricWidth)/2.0+currentLyricWidth;
+    CGFloat ret=(self.frame.size.width-_fullLyricWidth)/2.0+currentLyricWidth;
     return ret;
 }
--(void)testSwitch{
+-(void)showAuthor{
     self.text=@"Author:Brend0n";
     self.font=[UIFont fontWithName:@"Helvetica-Bold" size:17];
     _fullLyricWidth=[self textWidth:self.text withFont:self.font];
     self.timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-    dispatch_source_set_timer(self.timer, dispatch_walltime(NULL, 0), (1.0/15.0) * NSEC_PER_SEC, 0);
+    dispatch_source_set_timer(self.timer, dispatch_walltime(NULL, 0), (1.0/12.0) * NSEC_PER_SEC, 0);
     __block int i=0;
     dispatch_source_set_event_handler(self.timer, ^{
         i++;

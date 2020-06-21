@@ -3,8 +3,8 @@ TARGET = simulator:clang:11.2:9.0
 ARCHS = x86_64
 else
 TARGET = iphone:clang:11.2:9.0
-# ARCHS= arm64 arm64e
-ARCHS= arm64
+ARCHS= arm64 arm64e
+# ARCHS= arm64
 endif
 include $(THEOS)/makefiles/common.mk
 
@@ -44,6 +44,8 @@ setup:: all
 	@resim 
 endif
 
-remove::
+remove:: 
 	@rm -f /opt/simject/$(TWEAK_NAME).dylib /opt/simject/$(TWEAK_NAME).plist
+	sudo rm -r $(PL_SIMULATOR_BUNDLES_PATH)/$(BUNDLE_NAME).bundle
+	sudo rm $(PL_SIMULATOR_PLISTS_PATH)/$(BUNDLE_NAME).plist
 	@resim 

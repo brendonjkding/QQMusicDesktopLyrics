@@ -12,7 +12,7 @@
 #else
 #define kButtonWidth 30
 #endif
-BOOL positionLocked;
+
 @interface QQWQSuspendView  (){
     CGPoint _originalPoint;//之前的位置
 }
@@ -55,16 +55,6 @@ static QQWQSuspendView *_suspendView;
     //边框颜色
     self.layer.borderColor = [UIColor clearColor].CGColor;
     //图片~文字等...
-
-    CGSize screenSize = [[UIScreen mainScreen] bounds].size;
-    _label=[[UILabel alloc] initWithFrame:CGRectMake(0,0,screenSize.width,kButtonWidth)];
-    _label.text=@"Author: Brend0n";
-    _label.textColor=[UIColor blackColor];
-    _label.adjustsFontSizeToFitWidth=YES;
-    _label.textAlignment=NSTextAlignmentCenter;
-    [_label setBackgroundColor:[[UIColor alloc] initWithRed:1 green:1 blue:1 alpha:0.3]];
-    [_label setFont:[UIFont fontWithName:@"Helvetica-Bold" size:15]];
-    [self addSubview:_label];
 
     //滑动手势
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(pan:)];

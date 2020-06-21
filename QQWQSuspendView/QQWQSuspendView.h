@@ -20,7 +20,6 @@ typedef NS_ENUM(NSUInteger, WQSuspendViewType) {
 @interface QQWQSuspendView : UIView
 
 @property (nonatomic, copy) void (^tapBlock)(void);
-@property (nonatomic) UILabel* label;
 
 /** 显示 + 位置 + 点击的事件 */
 + (id)showWithType:(WQSuspendViewType)type inWindow:( UIWindow* __nullable)window tapBlock:(void (^)(void))tapBlock;

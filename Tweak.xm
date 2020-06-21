@@ -1,6 +1,7 @@
 #import "QQWQSuspendView/QQWQSuspendView.h"
 #import "LyricLabel.h"
 #import "MyLyric.h"
+#import "QQMusic.h"
 
 #import <substrate.h>
 #import <rocketbootstrap/rocketbootstrap.h>
@@ -9,6 +10,12 @@
 #import <notify.h>
 
 //cuctom
+@interface lyricWindowRootViewController : UIViewController
+@property (nonatomic, strong) dispatch_source_t hideTimer;
+-(void)hideWindow;
+-(void)showWindow;
+@end
+
 @interface LyricWindow:UIWindow
 @property BOOL positionLocked;
 @end
@@ -19,29 +26,132 @@
 @end
 
 //global
-BOOL enabled;
+BOOL enabled=0;
+BOOL positionLocked=0;
+BOOL autoHide=0;
+unsigned lyricWindowContextId=0;
+CPDistributedMessagingCenter * _messagingCenter;
+void loadPref();
+NSString*prefPath=@"/var/mobile/Library/Preferences/com.brend0n.qqmusicdesktoplyrics.plist";
+
 QQWQSuspendView* lyricView;
 LyricWindow *lyricWindow;
+LyricLabel *lyricLabel;
+
 NSMutableDictionary *allLyrics;
 double lstTime=0;
 MySentence* lstSentence;
 NSString*lstSongName;
 int lstSentenceIndex=0;
-CPDistributedMessagingCenter * _messagingCenter;
-UIWindow*rootWindow=0;
-BOOL positionLocked=0;
-unsigned lyricWindowContextId=0;
-LyricLabel *lyric;
-NSString*prefPath=@"/var/mobile/Library/Preferences/com.brend0n.qqmusicdesktoplyrics.plist";
-void loadPref();
 
 //custom imp
+@implementation lyricWindowRootViewController
+
+-(void)loadView{
+	[super loadView];
+	lyricView=[QQWQSuspendView showWithType:WQSuspendViewTypeNone inWindow:nil tapBlock:^{} ];
+	[self.view addSubview:lyricView];
+
+	CGSize screenSize = [[UIScreen mainScreen] bounds].size;
+	lyricLabel=[[LyricLabel alloc] initWithFrame:CGRectMake(0,0,screenSize.width,30)];
+	[lyricLabel showAuthor];
+    [lyricView addSubview:lyricLabel];
+}
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskAll;
+}
+
+- (BOOL)shouldAutorotate
+{
+    return YES;
+}
+// - (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation
+//                                 duration:(NSTimeInterval)duration
+// {
+//     [UIView setAnimationsEnabled:NO];
+// }
+
+// - (void) didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation
+// {   
+//     [UIView setAnimationsEnabled:YES];
+// }
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+	// NSLog(@"viewWillTransitionToSize");
+	CGFloat oldWidth=size.height;
+	CGFloat oldHeight=size.width;
+	CGFloat newWidth=size.width;
+	CGFloat newHeight=size.height;
+    if(lyricView){
+        [lyricView setFrame:CGRectMake(lyricView.frame.origin.x,lyricView.frame.origin.y*(newHeight/oldHeight),newWidth,lyricView.frame.size.height)];
+        [lyricLabel setFrame:CGRectMake(lyricLabel.frame.origin.x,lyricLabel.frame.origin.y*(newHeight/oldHeight),newWidth,lyricLabel.frame.size.height)];
+        }
+    if (size.width > size.height) { // 横屏
+        // 横屏布局 balabala
+    } else {
+        // 竖屏布局 balabala
+    }
+}
+-(void)hideWindow{
+	[[self.view superview] setHidden:YES];
+}
+-(void)showWindow{
+	[[self.view superview] setHidden:NO];
+}
+@end
+
 @implementation LyricWindow
+- (id)initWithFrame:(CGRect)frame{
+	self=[super initWithFrame:frame];
+	if(!self) return self;
+
+	self.windowLevel = UIWindowLevelStatusBar;
+	self.clipsToBounds=YES;
+	[self setHidden:NO];
+	[self setAlpha:1.0];
+	[self setBackgroundColor:[UIColor clearColor]];
+	
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationChanged:) name:UIDeviceOrientationDidChangeNotification object:nil];
+
+	return self;
+}
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
 	if(_positionLocked) return nil;
     UIView *hitTestView = [super hitTest:point withEvent:event];
-    if(hitTestView==self) return nil;
+    if(hitTestView==self||hitTestView==self.rootViewController.view) return nil;
     else return hitTestView;
+}
+
+#define DegreesToRadians(degrees) (degrees * M_PI / 180)
+
+-(void)orientationChanged:(NSNotification*)notification{
+	// UIDeviceOrientation orientation=[[UIDevice currentDevice] orientation];
+	// NSLog(@"orientationChanged: %ld",orientation);
+	// CGAffineTransform transform;
+	// switch(orientation){
+	// 	case UIDeviceOrientationPortrait:
+	// 		transform=CGAffineTransformMakeRotation(DegreesToRadians(0));
+	// 		break;
+	// 	case UIDeviceOrientationPortraitUpsideDown:
+	// 		CGAffineTransformMakeRotation(DegreesToRadians(180));
+	// 		break;
+	// 	case UIDeviceOrientationLandscapeLeft:
+
+	// 		CGAffineTransformMakeRotation(DegreesToRadians(270));
+	// 		break;
+	// 	case UIDeviceOrientationLandscapeRight:
+	// 		CGAffineTransformMakeRotation(DegreesToRadians(90));
+	// 		break;
+	// 	default:
+	// 		break;
+
+
+	// }
+	// if(self){
+	// 	[self setFrame:CGRectMake(0,0,[[UIScreen mainScreen] bounds].size.width,[[UIScreen mainScreen] bounds].size.height)];
+	// 	[self setTransform:transform];
+	// 	[self layoutIfNeeded];
+	// }
 }
 @end
 @implementation QQLyricMessagingCenter
@@ -71,85 +181,22 @@ void loadPref();
 
 - (NSDictionary *)handleMessageNamed:(NSString *)name withUserInfo:(NSDictionary *)userInfo {
 	if(!enabled) return nil;
-	NSString*lyricText=userInfo[@"lyricText"];
-	lyricView.label.text=lyricText;
 
-	MySentence*sentence=[NSKeyedUnarchiver unarchiveObjectWithData:userInfo[@"sentence"]];
-	[lyric removeFromSuperview];
-	[lyric stopTimer];
-	
-	CGSize screenSize = [[UIScreen mainScreen] bounds].size;
-	lyric=[[LyricLabel alloc] initWithFrame:CGRectMake(0,0,screenSize.width,30)];
-	[lyric prepareLyric:sentence];
-    [lyricView addSubview:lyric];
+	NSData* sentenceData=userInfo[@"sentence"];
+	MySentence*sentence=[NSKeyedUnarchiver unarchiveObjectWithData:sentenceData];
+	[lyricLabel prepareSentence:sentence];
+
+
+
+	[NSObject cancelPreviousPerformRequestsWithTarget:lyricWindow.rootViewController selector:@selector(hideWindow) object:nil];
+	[lyricWindow.rootViewController performSelector:@selector(showWindow)];
+	if(autoHide){	
+		[lyricWindow.rootViewController performSelector:@selector(hideWindow) withObject:nil afterDelay:30];
+	}
+
 	return nil;
 }
 
-@end
-
-@interface UIWindow()
--(unsigned)_contextId;
-@end
-
-// //Header SB
-
-
-// @interface FBScene
-// @property (nonatomic,copy,readonly) NSString * identifier;   
-// @end
-
-// @interface FBSceneHostWrapperView:UIView
-// @property (nonatomic,retain,readonly) FBScene* scene;
-// @end
-
-// @interface FBContextLayerHostView:UIView
-// @end
-
-// @interface CALayerHost:CALayer
-// -(unsigned)contextId;
-// @end
-
-//Header QQMusic
-@interface AudioPlayManager
-- (double)curTime;
-@property(retain, nonatomic) id currentSong; // @synthesize currentSong;
-@end
-
-@interface KSCharacter
-@property(retain, nonatomic) NSString *character; // @synthesize character=_character;
-@property(nonatomic) long long duration; // @synthesize duration=_duration;
-@property(nonatomic) long long end; // @synthesize end=_end;
-@property(nonatomic) long long start; // @synthesize start=_start;
-@property(nonatomic) long long startTime; // @synthesize startTime=_startTime;
-
-@end
-
-@interface KSSentence
-@property(nonatomic) long long startTime; // @synthesize startTime=_startTime;
-@property(retain, nonatomic) NSString *text; // @synthesize text=_text;
-@property(nonatomic) int sentenceTransType;
-@property(retain, nonatomic) NSMutableArray *charactersArray; // @synthesize charactersArray=_charactersArray;
-@end
-
-
-@interface KSLyric
-@property(retain, nonatomic) NSMutableArray *sentencesArray; // @synthesize
-@property(nonatomic) int lyricFormat; 
-@property(retain, nonatomic) NSString *title; // @synthesize title=_title;
-@end
-
-
-@interface KSQrcLyricParser
-@property(nonatomic) int currentTransType; // @synthesize currentTransType=_currentTransType;
-@property(retain, nonatomic) KSLyric *lyric; // @synthesize lyric=_lyric;
-@end
-
-@interface SongInfo
-- (id)song_Name;
-@end
-
-@interface LocalLyricObject
-@property(retain, nonatomic) KSLyric *originLyric; // @synthesize originLyric=_originLyric;
 @end
 
 
@@ -193,9 +240,9 @@ void loadPref();
     }
 	if(_lrc) {
 		NSLog(@"curSentence:%@",_lrc);
-    	// Send a message with a dictionary
-    	NSData*sentenceData=[NSKeyedArchiver archivedDataWithRootObject:lstSentence];
-	    NSDictionary * message = [NSDictionary dictionaryWithObjectsAndKeys: _lrc,@"lyricText",sentenceData,@"sentence",nil];
+   		NSData*sentenceData=[NSKeyedArchiver archivedDataWithRootObject:lstSentence];
+	    NSDictionary *message = [NSDictionary dictionaryWithObjectsAndKeys: _lrc,@"lyricText",sentenceData,@"sentence",nil];
+    	
 	    [_messagingCenter sendMessageName:@"changeLyric" userInfo:message];
 		
 	}
@@ -245,18 +292,18 @@ void createMyLyric(SongInfo* info,LocalLyricObject*lyricObject){
 
 %hook LyricManager
 - (id)getLyricObjectFromLocal:(id)arg1 lyricFrom:(unsigned long long)arg2 { 
-	NSLog(@"getLyricObjectFromLocal:(id)%@ lyricFrom:(unsigned long long) start",arg1);
+	// NSLog(@"getLyricObjectFromLocal:(id)%@ lyricFrom:(unsigned long long) start",arg1);
 	id r = %orig; 
-	NSLog(@" = %@", r); 
+	// NSLog(@" = %@", r); 
 	if(r){
 		createMyLyric(arg1,r);
 	}
 	return r; 
 }
 - (id)getLyricObjectFromLocal:(id)arg1 { 
-	NSLog(@"getLyricObjectFromLocal:(id)%@ lyricFrom:(unsigned long long) start",arg1);
+	// NSLog(@"getLyricObjectFromLocal:(id)%@ lyricFrom:(unsigned long long) start",arg1);
 	id r = %orig; 
-	NSLog(@" = %@", r); 
+	// NSLog(@" = %@", r); 
 	if(r){
 		createMyLyric(arg1,r);
 	}
@@ -266,22 +313,19 @@ void createMyLyric(SongInfo* info,LocalLyricObject*lyricObject){
 %end
 %end //QQMusicHook
 
+@interface UIWindow()
+-(unsigned)_contextId;
+@end
 
 %group SBHook
 %hook SpringBoard
 -(void) applicationDidFinishLaunching:(id)application{
 	%orig;
 	NSLog(@"applicationDidFinishLaunching");
-	lyricWindow=[[LyricWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    lyricWindow.windowLevel = UIWindowLevelStatusBar;
-	[lyricWindow setHidden:NO];
-	[lyricWindow setAlpha:1.0];
-	[lyricWindow setBackgroundColor:[UIColor clearColor]];
-	lyricView=[QQWQSuspendView showWithType:WQSuspendViewTypeNone inWindow:nil tapBlock:^{} ];
-	[lyricWindow addSubview:lyricView];
-
-	loadPref();
 	[QQLyricMessagingCenter sharedInstance];
+
+	lyricWindow=[[LyricWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+	lyricWindow.rootViewController=[lyricWindowRootViewController new];
 	unsigned contextId=[lyricWindow _contextId];
 	lyricWindowContextId=contextId;
 
@@ -292,57 +336,10 @@ void createMyLyric(SongInfo* info,LocalLyricObject*lyricObject){
     [prefs writeToFile:prefPath atomically:YES];
     notify_post("com.brend0n.qqmusicdesktoplyrics/loadPref");
 
-	[lyricView.label removeFromSuperview];
-	CGSize screenSize = [[UIScreen mainScreen] bounds].size;
-	lyric=[[LyricLabel alloc] initWithFrame:CGRectMake(0,0,screenSize.width,30)];
-	[lyric testSwitch];
-    [lyricView addSubview:lyric];
+    loadPref();
     
 }
 %end
-
-
-
-// %hook FBRootWindow
-// +(id) alloc{
-// 	id ret=%orig;
-// 	rootWindow=ret;
-// 	return ret;
-// }
-// %end
-
-// %hook UIWindow
-// -(id)hitTest:(CGPoint)arg1 withEvent:(id)arg2 {
-// 	static dispatch_once_t onceToken;
-//     dispatch_once(&onceToken, ^{
-//     	// id wrappers=[[rootWindow subviews][0] subviews];
-//     	// for(id wrapper in wrappers){
-//     	// 	if(![[wrapper subviews] count]) continue;
-//     	// 	id sceneLayer=[wrapper subviews][0];
-//     	// 	if(![[sceneLayer subviews] count]) continue;
-//     	// 	id contextLayer=[sceneLayer subviews][0];
-//     	// 	id layerHost=[contextLayer layer];
-//     	// 	unsigned contextId=[layerHost contextId];
-//     	// 	NSString*sceneId=[[sceneLayer scene] identifier];
-//     	// 	// NSLog(@"%@,%u",sceneId,contextId);
-//     	// 	if([sceneId containsString:@"LyricWindow"]){
-//     	// 		lyricWindowContextId=contextId;
-//     	// 		NSLog(@"got:%u",contextId);
-//     	// 		NSString*prefPath=@"/var/mobile/Library/Preferences/com.brend0n.qqmusicdesktoplyrics.plist";
-// 			  //   NSMutableDictionary *prefs = [[NSMutableDictionary alloc] initWithContentsOfFile:prefPath];
-// 			  //   if(!prefs) prefs=[NSMutableDictionary new];
-// 			  //   prefs[@"lyricWindowContextId"]=[NSNumber numberWithUnsignedInt:lyricWindowContextId];
-// 			  //   [prefs writeToFile:prefPath atomically:YES];
-// 			  //   notify_post("com.brend0n.qqmusicdesktoplyrics/loadPref");
-//     	// 	}
-//     	// }
-//     });
-// 	id ret= %orig;
-
-// 	return ret;
-
-// }
-// %end
 %end// SBHook
 
 %group BBHook
@@ -370,15 +367,17 @@ void loadPref(){
 	
 	if(!prefs) enabled=YES;
 	else enabled=[prefs[@"enabled"] boolValue];
-	if(!prefs) positionLocked=FALSE;
+	if(!prefs) positionLocked=NO;
 	else positionLocked=[prefs[@"positionLocked"] boolValue];
+	if(!prefs) autoHide=NO;
+	else autoHide=[prefs[@"autoHide"] boolValue];
 
 	lyricWindowContextId=[prefs[@"lyricWindowContextId"] unsignedIntValue];
 
 	if(lyricWindow){
 		[lyricWindow setHidden:!enabled];
-		[lyricView setHidden:!enabled];
 		[lyricWindow setPositionLocked:positionLocked];
+		if(autoHide) [lyricWindow.rootViewController performSelector:@selector(hideWindow) withObject:nil afterDelay:30];
 	}
 	
 }

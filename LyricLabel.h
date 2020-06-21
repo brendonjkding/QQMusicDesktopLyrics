@@ -1,6 +1,5 @@
 #import "MyLyric.h"
 @interface LyricLabel:UILabel
-@property CGFloat width;
 @property CGFloat fullLyricWidth;
 @property CGFloat currentLyricPosition;
 @property (nonatomic, strong) dispatch_source_t timer;
@@ -9,8 +8,8 @@
 @property (nonatomic) double startTime;
 @property (nonatomic) double sentenceStartTime;
 @property (nonatomic) int lstIndex;
--(void)prepareLyric:(MySentence*)sentences;
+-(void)prepareSentence:(MySentence*)sentences;
 -(void)stopTimer;
--(void)testSwitch;
-
+-(void)showAuthor;
+- (CGFloat)locationToCharacterIndex:(int)index;
 @end

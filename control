@@ -1,9 +1,13 @@
 Package: com.brend0n.qqmusicdesktoplyrics
 Name: QQMusicDesktopLyrics
 Depends: mobilesubstrate, com.rpetrich.rocketbootstrap (>= 1.0.2) | firmware (<< 7.0), preferenceloader
-Version: 0.0.3
+Version: 0.0.5
 Architecture: iphoneos-arm
 Description: show QQMusic lyrics anywhere
+ What's New:
+ 0.0.5 rotate support, autohide support
+ 0.0.4 fix absolute music crash bug
+ 0.0.3 karaoke support
 Maintainer: Brend0n <brendonjkding@126.com>
 Author: Brend0n <brendonjkding@126.com>
 Section: Tweaks
